@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -17,36 +16,26 @@ const allowedOrigins = [
   process.env.FRONTEND_URL_PROD,
 ].filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-
-      // ✅ allow any localhost port for dev (5173/5174/5176...)
-      if (origin.startsWith("http://localhost:")) return cb(null, true);
-
-      if (allowedOrigins.includes(origin)) return cb(null, true);
-
-      return cb(new Error("CORS blocked: " + origin));
-    },
-    credentials: true,
-  })
-);
-
-
+// -------------------- Middleware --------------------
 app.use(express.json());
 app.use(
   cors({
     origin: function (origin, cb) {
       // allow Postman/Thunder Client (no origin)
       if (!origin) return cb(null, true);
+      
+      // ✅ allow any localhost port for dev (5173/5174/5176...)
+      if (origin.startsWith("http://localhost:")) return cb(null, true);
+      
       if (allowedOrigins.includes(origin)) return cb(null, true);
+      
       return cb(new Error("CORS blocked: " + origin));
     },
     credentials: true,
   })
 );
 
+// -------------------- Database Connection --------------------
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT || 3306),
@@ -60,6 +49,18 @@ const pool = mysql.createPool({
     rejectUnauthorized: false,
   },
 });
+
+// Test database connection on startup
+pool.getConnection()
+  .then((connection) => {
+    console.log('✓ Database Connected Successfully');
+    console.log('Database:', process.env.DB_NAME);
+    connection.release();
+  })
+  .catch((err) => {
+    console.error('✗ Database Connection Error:', err.message);
+    console.error('Check your .env file for correct DB credentials');
+  });
 
 // -------------------- Helpers --------------------
 function safeUser(u) {
@@ -139,6 +140,7 @@ app.post("/auth/register", async (req, res) => {
     const user = { id: result.insertId, name, email, school, role };
     return res.status(201).json({ message: "Registered successfully", user });
   } catch (err) {
+    console.error("Register error:", err);
     return res.status(500).json({ message: "Register failed", error: err.message });
   }
 });
@@ -164,6 +166,7 @@ app.post("/auth/login", async (req, res) => {
 
     return res.json({ message: "Login successful", token, user: safeUser(user) });
   } catch (err) {
+    console.error("Login error:", err);
     return res.status(500).json({ message: "Login failed", error: err.message });
   }
 });
@@ -324,7 +327,7 @@ app.post("/reminders", authRequired, async (req, res) => {
   }
 });
 
-// GET /reminders (user’s reminders)
+// GET /reminders (user's reminders)
 app.get("/reminders", authRequired, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -346,6 +349,11 @@ app.get("/reminders", authRequired, async (req, res) => {
 
 // -------------------- Start Server --------------------
 app.listen(PORT, () => {
-  console.log("Allowed origins:", allowedOrigins);
-  console.log(`Server running on port ${PORT}`);
+  console.log('═══════════════════════════════════════');
+  console.log('Server Configuration:');
+  console.log('─────────────────────────────────────');
+  console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✓ Allowed origins:`, allowedOrigins.length > 0 ? allowedOrigins : 'localhost only');
+  console.log('═══════════════════════════════════════');
 });
