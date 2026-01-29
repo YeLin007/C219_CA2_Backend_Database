@@ -12,13 +12,27 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
-// CORS allowed origins (local + prod)
 const allowedOrigins = [
-  "http://localhost:5173",   // Vite local dev
-  "http://localhost:3000",   // optional (if you ever test CRA or same port)
-  process.env.FRONTEND_URL,       // your deployed frontend
-  process.env.FRONTEND_URL_PROD,  // another deployed frontend (optional)
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_PROD,
 ].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+
+      // ✅ allow any localhost port for dev (5173/5174/5176...)
+      if (origin.startsWith("http://localhost:")) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      return cb(new Error("CORS blocked: " + origin));
+    },
+    credentials: true,
+  })
+);
+
 
 app.use(express.json());
 app.use(
