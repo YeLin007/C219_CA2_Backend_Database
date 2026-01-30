@@ -4,37 +4,42 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const mysql = require("mysql2/promise");
-
+const passport = require("passport")
+const google = require("passport-google-oauth20").Strategy
 const app = express();
 
 // -------------------- Config --------------------
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.FRONTEND_URL_PROD,
-].filter(Boolean);
+const frontEndUrl = process.env.FRONTEND_URL
+  
+
 
 // -------------------- Middleware --------------------
 app.use(express.json());
+
 app.use(
   cors({
     origin: function (origin, cb) {
-      // allow Postman/Thunder Client (no origin)
+      
       if (!origin) return cb(null, true);
       
-      // ✅ allow any localhost port for dev (5173/5174/5176...)
-      if (origin.startsWith("http://localhost:")) return cb(null, true);
       
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+      const allowedOrigin = frontEndUrl
+      
+      
+      const isLocal = origin.startsWith("http://localhost:");
+
+      if (isLocal || origin === allowedOrigin) {
+        return cb(null, true);
+      }
       
       return cb(new Error("CORS blocked: " + origin));
     },
     credentials: true,
   })
 );
-
 // -------------------- Database Connection --------------------
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -170,6 +175,70 @@ app.post("/auth/login", async (req, res) => {
     return res.status(500).json({ message: "Login failed", error: err.message });
   }
 });
+
+//Google OAuth 
+
+app.get('/auth/google', passport.authenticate('google',{scope:["profile","email"]}))
+
+
+passport.use(new google({
+  clientID:process.env.GOOGLE_CLIENT_ID,
+  clientSecret:process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL:process.env.GOOGLE_CLIENT_DB_URL,
+  userProfileURL:"https://www.googleapis.com/oauth2/v3/userinfo"
+},
+  async(accessToken,refreshToken,profile,cb) =>{
+    try{
+      const [exitingUser] = await pool.query("SELECT * FROM users WHERE email=?",[profile.emails[0].value])
+      if(exitingUser.length<1){
+        const email = profile.emails[0].value
+
+        return cb(null,{email,isNew:true})
+        
+      }else{
+        const euser = exitingUser[0]
+        const user = safeUser(euser)
+        const token = jwt.sign({ id: euser.id, role: euser.role, email: euser.email, name: euser.name,school:euser.school },JWT_SECRET,{ expiresIn: "7d" })
+        
+        return cb(null,{token:token,user:user,isNew:false})
+        
+      }
+    }catch(err){
+      console.error(err)
+    }
+  }
+))
+
+app.get(process.env.GOOGLE_CLIENT_DB_URL, passport.authenticate('google', { session: false }),
+    async(req,res)=>{
+ 
+  if(req.user.isNew){
+    const encodedemail = encodeURIComponent(req.user.email)
+   return res.redirect(`${frontEndUrl}/gsignup?email=${encodedemail}`)
+  }else{
+   const user = encodeURIComponent(JSON.stringify(req.user.user))
+    return res.redirect(`${frontEndUrl}/successlogin?token=${req.user.token}&user=${user}`)
+  }
+})
+
+app.post('/auth/register/google',async(req,res)=>{
+  const {name,email,school,role} = req.body
+  try{
+    const [rows] =await pool.query('INSERT INTO users (name,email,school,role) VALUES (?,?,?,?)',[name,email,school,role])
+    const newuser =  {
+      id: rows.insertId, // This is where the new ID lives
+      name,
+      email,
+      school,
+      role
+    };
+    const token = jwt.sign({ id: newuser.id, role: newuser.role, email: newuser.email, name: newuser.name },JWT_SECRET,{ expiresIn: "7d" })
+    const user = safeUser(newuser)
+    return res.json({message:'Created user via Google!',token,user})
+  }catch(err){
+    res.json({message:"Error registering with google!"})
+  }
+})
 
 // GET /me (optional, helpful)
 app.get("/me", authRequired, async (req, res) => {
