@@ -13,31 +13,34 @@ const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 const frontEndUrl = process.env.FRONTEND_URL
-  
+const backendUrl = process.env.BACKEND_URL
 
 
 // -------------------- Middleware --------------------
 app.use(express.json());
-
+app.use(passport.initialize())
 app.use(
   cors({
     origin: function (origin, cb) {
       
       if (!origin) return cb(null, true);
+
       
-      
-      const allowedOrigin = frontEndUrl
+      const allowedOrigin = frontEndUrl?.replace(/\/$/, "");
       
       
       const isLocal = origin.startsWith("http://localhost:");
+      const isProduction = origin === allowedOrigin;
 
-      if (isLocal || origin === allowedOrigin) {
+      if (isLocal || isProduction) {
         return cb(null, true);
       }
       
       return cb(new Error("CORS blocked: " + origin));
     },
-    credentials: true,
+    credentials: true, 
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 // -------------------- Database Connection --------------------
@@ -184,7 +187,7 @@ app.get('/auth/google', passport.authenticate('google',{scope:["profile","email"
 passport.use(new google({
   clientID:process.env.GOOGLE_CLIENT_ID,
   clientSecret:process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL:`${frontEndUrl}/auth/google/register`,
+  callbackURL:`${backendUrl}/auth/google/register`,
   userProfileURL:"https://www.googleapis.com/oauth2/v3/userinfo"
 },
   async(accessToken,refreshToken,profile,cb) =>{
@@ -209,7 +212,7 @@ passport.use(new google({
   }
 ))
 
-app.get(`${frontEndUrl}/auth/google/register`, passport.authenticate('google', { session: false }),
+app.get(`/auth/google/register`, passport.authenticate('google', { session: false }),
     async(req,res)=>{
  
   if(req.user.isNew){
@@ -226,7 +229,7 @@ app.post('/auth/register/google',async(req,res)=>{
   try{
     const [rows] =await pool.query('INSERT INTO users (name,email,school,role) VALUES (?,?,?,?)',[name,email,school,role])
     const newuser =  {
-      id: rows.insertId, // This is where the new ID lives
+      id: rows.insertId, 
       name,
       email,
       school,
@@ -423,6 +426,6 @@ app.listen(PORT, () => {
   console.log('─────────────────────────────────────');
   console.log(`✓ Server running on port ${PORT}`);
   console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✓ Allowed origins:`, allowedOrigins.length > 0 ? allowedOrigins : 'localhost only');
+  // console.log(`✓ Allowed origins:`, allowedOrigins.length > 0 ? allowedOrigins : 'localhost only');
   console.log('═══════════════════════════════════════');
 });
