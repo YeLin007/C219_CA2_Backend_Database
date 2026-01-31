@@ -209,7 +209,7 @@ passport.use(new google({
   }
 ))
 
-app.get(process.env.GOOGLE_CLIENT_DB_URL, passport.authenticate('google', { session: false }),
+app.get(`${frontEndUrl}/auth/google/register`, passport.authenticate('google', { session: false }),
     async(req,res)=>{
  
   if(req.user.isNew){
