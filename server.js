@@ -184,7 +184,7 @@ app.get('/auth/google', passport.authenticate('google',{scope:["profile","email"
 passport.use(new google({
   clientID:process.env.GOOGLE_CLIENT_ID,
   clientSecret:process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL:process.env.GOOGLE_CLIENT_DB_URL,
+  callbackURL:`${frontEndUrl}/auth/google/register`,
   userProfileURL:"https://www.googleapis.com/oauth2/v3/userinfo"
 },
   async(accessToken,refreshToken,profile,cb) =>{
