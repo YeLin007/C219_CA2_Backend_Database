@@ -1,4 +1,5 @@
 require("dotenv").config();
+console.log("DEBUG: GOOGLE_CLIENT_ID length is:", process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.length : "UNDEFINED");
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
